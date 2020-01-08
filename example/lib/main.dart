@@ -65,6 +65,7 @@ class _MyHomePageState extends State<MyHomePage> {
             supportElasticity: true,
             closeOpenedItemOnTouch: true,
             slideProportion: 0.2,
+            actionOpenThreshold: 0.3,
             backgroundColor: Colors.white),
         child: Padding(
           padding: const EdgeInsets.all(8.0),
@@ -73,6 +74,7 @@ class _MyHomePageState extends State<MyHomePage> {
               builder: (_) {
                 print('debug -> build at builder $index');
                 return SlideItem(
+                  slidable: index % 5 != 0,
                   indexInList: index,
                   child: GestureDetector(
                     child: Container(

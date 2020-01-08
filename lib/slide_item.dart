@@ -9,11 +9,10 @@ typedef ActionTapCallback = void Function(Slide item);
 const kDefaultAnimDuration = const Duration(milliseconds: 200);
 
 abstract class Slide {
-  void open();
 
   void close();
 
-  Future delete();
+  Future delete([bool useAnim = true]);
 
   int get indexInList;
 }
@@ -77,6 +76,7 @@ class SlideConfig extends ValueNotifier<int> {
   }
 }
 
+/// 对外暴露的用于放在上层的提供配置信息以及共享菜单打开状态的Widget
 class SlideConfiguration extends StatelessWidget {
   final SlideConfig config;
   final Widget child;
@@ -99,11 +99,11 @@ class SlideConfiguration extends StatelessWidget {
   }
 }
 
-class _SlideConfigProvider extends InheritedWidget {
+class _SlideConfigInheritedWidget extends InheritedWidget {
   final SlideConfig config;
   final int value;
 
-  const _SlideConfigProvider(
+  const _SlideConfigInheritedWidget(
     this.config,
     this.value, {
     Key key,
@@ -114,16 +114,16 @@ class _SlideConfigProvider extends InheritedWidget {
   static SlideConfig of(BuildContext context, [bool listen = true]) {
     return listen
         ? context
-            .dependOnInheritedWidgetOfExactType<_SlideConfigProvider>()
+            .dependOnInheritedWidgetOfExactType<_SlideConfigInheritedWidget>()
             .config
         : (context
-                .getElementForInheritedWidgetOfExactType<_SlideConfigProvider>()
-                .widget as _SlideConfigProvider)
+                .getElementForInheritedWidgetOfExactType<_SlideConfigInheritedWidget>()
+                .widget as _SlideConfigInheritedWidget)
             .config;
   }
 
   @override
-  bool updateShouldNotify(_SlideConfigProvider old) {
+  bool updateShouldNotify(_SlideConfigInheritedWidget old) {
     return old.value != value;
   }
 }
@@ -138,6 +138,7 @@ class _ProviderWidget extends StatefulWidget {
   _ProviderWidgetState createState() => _ProviderWidgetState();
 }
 
+/// 模仿Provider的监听机制实现对Listenable数值的自动监听
 class _ProviderWidgetState extends State<_ProviderWidget> {
   _update() {
     setState(() {});
@@ -166,7 +167,7 @@ class _ProviderWidgetState extends State<_ProviderWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return _SlideConfigProvider(
+    return _SlideConfigInheritedWidget(
       widget.config,
       widget.config.value,
       child: widget.child,
@@ -174,13 +175,68 @@ class _ProviderWidgetState extends State<_ProviderWidget> {
   }
 }
 
+/// 缩小刷新范围的简单组件封装
+class _Consumer extends StatelessWidget {
+  _Consumer({
+    Key key,
+    @required this.builder,
+  })  : assert(builder != null),
+        super(key: key);
+
+  final Widget Function(BuildContext context, SlideConfig config) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    return builder(
+      context,
+      _SlideConfigInheritedWidget.of(context),
+    );
+  }
+}
+
+/// 因为一个Item划开菜单时其他item只需要拦截其自身的触摸事件，但是又由于关闭的监听在didChangeDependencies里面
+/// 为了避免在build中启动动画导致build过程中调用build，这里封装一个暴露了disChangeDependencies的StatefulWidget
+class _StfulConsumer extends StatefulWidget {
+  final void Function(SlideConfig config) didChangeDependencies;
+  final Widget Function(BuildContext context, SlideConfig config) builder;
+
+  const _StfulConsumer({Key key, this.didChangeDependencies, this.builder})
+      : super(key: key);
+
+  @override
+  __StfulConsumerState createState() => __StfulConsumerState();
+}
+
+class __StfulConsumerState extends State<_StfulConsumer> {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    widget.didChangeDependencies?.call(_SlideConfigInheritedWidget.of(context));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.builder(context, _SlideConfigInheritedWidget.of(context));
+  }
+}
+
+/// 对外暴露的实现侧滑操作的Widget
 class SlideItem extends StatefulWidget {
   final int indexInList;
   final List<SlideAction> actions;
   final Widget child;
+  final bool slidable;
 
-  const SlideItem({Key key, this.indexInList, this.actions, this.child})
-      : super(key: key);
+  const SlideItem(
+      {Key key,
+      this.indexInList,
+      this.actions,
+      this.child,
+      this.slidable = true})
+      : assert(indexInList != null && indexInList >= 0),
+        assert((slidable && actions != null) || !slidable),
+        assert(child != null),
+        super(key: key);
 
   @override
   _SlideItemState createState() => _SlideItemState();
@@ -229,14 +285,9 @@ class _SlideItemState extends State<SlideItem>
   @override
   void initState() {
     super.initState();
-    _slideConfig = _SlideConfigProvider.of(context, false);
+    _slideConfig = _SlideConfigInheritedWidget.of(context, false);
     _slideController = AnimationController(
         vsync: this, duration: _slideConfig.slideOpenAnimDuration);
-//    _slideAnimation =
-//        Tween<Offset>(begin: Offset.zero, end: Offset(-maxSlideProportion, 0))
-//            .animate(CurvedAnimation(
-//                curve: Interval(0, maxSlideProportion),
-//                parent: _slideController));
     _slideAnimation = Tween<Offset>(begin: Offset.zero, end: Offset(-1, 0))
         .animate(_slideController);
 
@@ -244,15 +295,6 @@ class _SlideItemState extends State<SlideItem>
         vsync: this, duration: _slideConfig.deleteStep2AnimDuration);
     _dismissAnimation =
         Tween<double>(begin: 1.0, end: 0.0).animate(_dismissController);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _slideConfig = _SlideConfigProvider.of(context, false);
-    if (_slideConfig.nowSlidingIndex != indexInList &&
-        _status != _SlideItemStatus.closed &&
-        _status != _SlideItemStatus.sliding) close();
   }
 
   @override
@@ -268,6 +310,9 @@ class _SlideItemState extends State<SlideItem>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         itemSize = context.size;
       });
+    }
+    if (!widget.slidable) {
+      return _buildUnSlidableWidget();
     }
     return deleteSizeChange
         ? _buildDeleteAnimWidget()
@@ -288,9 +333,9 @@ class _SlideItemState extends State<SlideItem>
         .whenComplete(() {
       translateValue = 0.0;
       _status = _SlideItemStatus.closed;
-      if (_SlideConfigProvider.of(context, false).nowSlidingIndex ==
+      if (_SlideConfigInheritedWidget.of(context, false).nowSlidingIndex ==
           indexInList) {
-        _SlideConfigProvider.of(context, false).close();
+        _SlideConfigInheritedWidget.of(context, false).close();
       }
     });
   }
@@ -298,8 +343,7 @@ class _SlideItemState extends State<SlideItem>
   @override
   int get indexInList => widget.indexInList;
 
-  @override
-  void open() {
+  void _open() {
     _status = _SlideItemStatus.opening;
     if (_slideController.isAnimating) {
       _slideController.stop();
@@ -318,25 +362,33 @@ class _SlideItemState extends State<SlideItem>
   }
 
   @override
-  Future delete() {
+  Future delete([bool useAnim = true]) {
     _status = _SlideItemStatus.deleting;
     Completer completer = Completer();
-    _slideController
-        .animateTo(1.0,
-            duration: _slideConfig.deleteStep1AnimDuration,
-            curve: Curves.easeIn)
-        .then((_) {
-      setState(() {
-        deleteSizeChange = true;
+    var onAnimComplete = () {
+      // 动画执行完之后清除状态，避免后面组件复用出现问题
+      _status = _SlideItemStatus.closed;
+      _slideController.value = 0.0;
+      itemSize = Size.zero;
+      completer.complete();
+    };
+    if (useAnim) {
+      _slideController
+          .animateTo(1.0,
+              duration: _slideConfig.deleteStep1AnimDuration,
+              curve: Curves.easeIn)
+          .then((_) {
+        setState(() {
+          deleteSizeChange = true;
+        });
+        _dismissController.forward(from: 0.0).then((__) {
+          deleteSizeChange = false;
+          onAnimComplete.call();
+        });
       });
-      _dismissController.forward(from: 0.0).then((__) {
-        deleteSizeChange = false;
-        _status = _SlideItemStatus.closed;
-        _slideController.value = 0.0;
-        itemSize = Size.zero;
-        completer.complete();
-      });
-    });
+    } else {
+      onAnimComplete.call();
+    }
     return completer.future;
   }
 
@@ -394,42 +446,73 @@ class _SlideItemState extends State<SlideItem>
                   (_slideController.value > targetSlideProportion
                       ? _slideController.value / actionCount
                       : _slideConfig.slideProportion);
-              int actionIndex = 0;
-              return _SlideItemContainer(
-                // 当有一个Item处于打开菜单状态时便需要屏蔽child的点击事件使其点击后只是关闭打开的Item
-                absorbing:
-                    _SlideConfigProvider.of(context).nowSlidingIndex >= 0 ||
+              return _StfulConsumer(
+                didChangeDependencies: (config) {
+                  _slideConfig = config;
+                  if (config.nowSlidingIndex != indexInList &&
+                      _status != _SlideItemStatus.closed &&
+                      _status != _SlideItemStatus.sliding) close();
+                },
+                builder: (_, config) {
+                  int actionIndex = 0;
+                  return _SlideItemContainer(
+                    // 当有一个Item处于打开菜单状态时便需要屏蔽child的点击事件使其点击后只是关闭打开的Item
+                    absorbing: config.nowSlidingIndex >= 0 ||
                         _status != _SlideItemStatus.closed,
-                animation: _slideAnimation,
-                child: widget.child,
-                action: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: actionList.map((action) {
-                    SlideAction sa = widget.actions[actionIndex++];
-                    double finallyActionWidth = actionNormalWidth;
-                    if (_status == _SlideItemStatus.deleting) {
-                      // _slideController.value对于1的剩余量
-                      double a = 1 - _slideController.value;
-                      // 删除动画额外运动总量
-                      double b = 1 - targetSlideProportion;
-                      finallyActionWidth = (a / b) * actionNormalWidth;
-                      if (sa.isDeleteButton) {
-                        finallyActionWidth = actionNormalWidth * actionCount -
-                            finallyActionWidth * (actionCount - 1);
-                      }
-                    }
-                    return Container(
-                      height: double.infinity,
-                      child: action,
-                      width: finallyActionWidth,
-                    );
-                  }).toList(),
-                ),
+                    animation: _slideAnimation,
+                    child: widget.child,
+                    action: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: actionList.map((action) {
+                        SlideAction sa = widget.actions[actionIndex++];
+                        double finallyActionWidth = actionNormalWidth;
+                        // 为删除动画计算Action所需宽度（删除按钮跨度逐渐拉伸，其余按钮宽度压缩）
+                        if (_status == _SlideItemStatus.deleting) {
+                          // _slideController.value对于1的剩余量
+                          double a = 1 - _slideController.value;
+                          // 删除动画额外运动总量
+                          double b = 1 - targetSlideProportion;
+                          finallyActionWidth = (a / b) * actionNormalWidth;
+                          if (sa.isDeleteButton) {
+                            finallyActionWidth =
+                                actionNormalWidth * actionCount -
+                                    finallyActionWidth * (actionCount - 1);
+                          }
+                        }
+                        return Container(
+                          height: double.infinity,
+                          child: action,
+                          width: finallyActionWidth,
+                        );
+                      }).toList(),
+                    ),
+                  );
+                },
               );
             },
           ),
         );
       },
+    );
+  }
+
+  Widget _buildUnSlidableWidget() {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onPanDown: (_) {
+        _onPanDown(_, null);
+      },
+      onTap: () {
+        close();
+      },
+      child: _Consumer(
+        builder: (_, config) {
+          return AbsorbPointer(
+            child: widget.child,
+            absorbing: config.nowSlidingIndex >= 0,
+          );
+        },
+      ),
     );
   }
 
@@ -455,11 +538,13 @@ class _SlideItemState extends State<SlideItem>
     }
     double newValue = translateValue + details.primaryDelta;
     if (newValue < targetSlideTranslate) {
+      // 滑动距离过量之后使其增速变缓
       translateValue +=
           (1 - newValue.abs() / maxSlideTranslate.abs()) * details.primaryDelta;
     } else {
       translateValue += details.primaryDelta;
     }
+    // 暂时不支持向右侧滑动，所以这里直接禁止其大于0
     translateValue = translateValue > 0 ? 0 : translateValue;
     _slideController.value = translateValue.abs() / itemWidth;
     _markSlidingItemIndex();
@@ -472,21 +557,22 @@ class _SlideItemState extends State<SlideItem>
     if (slideRatio < _slideConfig.actionOpenThreshold) {
       close();
     } else {
-      open();
+      _open();
     }
   }
 
   _onPanDown(DragDownDetails details, double maxWidth) {
     closeByPanDown = false;
     // 当触摸事件落在打开的action区域时不响应此事件，避免影响action的触摸事件
-    if ((1 - details.localPosition.dx / maxWidth) > _slideController.value) {
+    if (maxWidth == null ||
+        ((1 - details.localPosition.dx / maxWidth) > _slideController.value)) {
       if (_status == _SlideItemStatus.opened) {
         if (_slideConfig.closeOpenedItemOnTouch) {
           closeByPanDown = true;
           close();
         }
       } else {
-        _SlideConfigProvider.of(context, false).close();
+        _SlideConfigInheritedWidget.of(context, false).close();
       }
     }
   }
@@ -495,7 +581,7 @@ class _SlideItemState extends State<SlideItem>
   /// Index设为负数表示全部关闭，这样新拉开的就没办法关闭了，所以在能够标记当前Item状态的地方
   /// 多次设置这个值，因为值没有变化不会引起重新构建，所以对性能消耗不大
   _markSlidingItemIndex() {
-    _SlideConfigProvider.of(context, false).value = indexInList;
+    _SlideConfigInheritedWidget.of(context, false).value = indexInList;
   }
 }
 
@@ -524,7 +610,7 @@ class _SlideItemContainer extends StatelessWidget {
           child: AbsorbPointer(
             child: Container(
               child: child,
-              color: _SlideConfigProvider.of(context, false).backgroundColor,
+              color: _SlideConfigInheritedWidget.of(context, false).backgroundColor,
             ),
             absorbing: absorbing,
           ),
