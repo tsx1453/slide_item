@@ -1,7 +1,6 @@
 name: slide_item
-description: Flutter侧滑菜单组件
-version: 1.0.0
-author: 1453918362@qq.com
+description: The Flutter ListView's Item sliding component. You do n’t need to change the existing code, you only need to wrap the original Widget with two widgets provided by this package
+version: 1.0.2
 homepage: https://github.com/tsx1453/slide_item
 
 environment:

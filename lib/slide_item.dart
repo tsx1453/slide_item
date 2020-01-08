@@ -9,7 +9,6 @@ typedef ActionTapCallback = void Function(Slide item);
 const kDefaultAnimDuration = const Duration(milliseconds: 200);
 
 abstract class Slide {
-
   void close();
 
   Future delete([bool useAnim = true]);
@@ -117,7 +116,8 @@ class _SlideConfigInheritedWidget extends InheritedWidget {
             .dependOnInheritedWidgetOfExactType<_SlideConfigInheritedWidget>()
             .config
         : (context
-                .getElementForInheritedWidgetOfExactType<_SlideConfigInheritedWidget>()
+                .getElementForInheritedWidgetOfExactType<
+                    _SlideConfigInheritedWidget>()
                 .widget as _SlideConfigInheritedWidget)
             .config;
   }
@@ -610,7 +610,8 @@ class _SlideItemContainer extends StatelessWidget {
           child: AbsorbPointer(
             child: Container(
               child: child,
-              color: _SlideConfigInheritedWidget.of(context, false).backgroundColor,
+              color: _SlideConfigInheritedWidget.of(context, false)
+                  .backgroundColor,
             ),
             absorbing: absorbing,
           ),
