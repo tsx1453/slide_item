@@ -27,6 +27,7 @@ InheritedWidget，若老版本需要使用可使用带有后缀-adapt的版本
 |:-:| :-: |:-:|
 |  child |子Widget | Widget |
 | config | SlideConfig类型的配置Bean | SlideConfig |
+|controller|控制列表元素滑动状态|SlideController|
 
 ##### SlideConfig
 
@@ -42,7 +43,6 @@ InheritedWidget，若老版本需要使用可使用带有后缀-adapt的版本
 | slideCloseAnimDuration  |            关闭侧边菜单动画的持续时间（规则同上）            | Duration |    200ms     |
 | deleteStep1AnimDuration | 删除动画第一阶段（删除按钮Widget大小扩展为整个列表Item大小）持续时间 | Duration |    200ms     |
 | deleteStep2AnimDuration |          删除动画第二阶段（Item的高度变化）持续时间          | Duration |    200ms     |
-
 
 ##### SlideItem
 

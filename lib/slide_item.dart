@@ -16,6 +16,29 @@ abstract class Slide {
   int get indexInList;
 }
 
+enum _SlideItemStatus {
+  sliding,
+  opening,
+  closing,
+  opened,
+  closed,
+  deleting,
+}
+
+enum _SlideDirection {
+  ltr,
+  rtl,
+}
+
+class SlideAction {
+  bool isDeleteButton;
+  Widget actionWidget;
+  ActionTapCallback tapCallback;
+
+  SlideAction(
+      {this.actionWidget, this.tapCallback, this.isDeleteButton = false});
+}
+
 class SlideConfig extends ValueNotifier<int> {
   int get nowSlidingIndex => value;
 
@@ -85,13 +108,29 @@ class SlideConfig extends ValueNotifier<int> {
   }
 }
 
+/// 对外暴露的Controller类，后续考虑加上打开、删除等控制操作
+class SlideController {
+  SlideConfig _config;
+
+  int get nowOpenedIndex => _config?.nowSlidingIndex ?? -1;
+
+  void close() {
+    _config?._close();
+  }
+
+  SlideController();
+}
+
 /// 对外暴露的用于放在上层的提供配置信息以及共享菜单打开状态的Widget
 class SlideConfiguration extends StatelessWidget {
   final SlideConfig config;
   final Widget child;
+  final SlideController controller;
 
-  const SlideConfiguration({Key key, this.config, this.child})
-      : super(key: key);
+  SlideConfiguration({Key key, this.config, this.child, this.controller})
+      : super(key: key) {
+    controller?._config = config;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -718,27 +757,4 @@ class _SlideItemContainer extends StatelessWidget {
       ],
     );
   }
-}
-
-enum _SlideItemStatus {
-  sliding,
-  opening,
-  closing,
-  opened,
-  closed,
-  deleting,
-}
-
-enum _SlideDirection {
-  ltr,
-  rtl,
-}
-
-class SlideAction {
-  bool isDeleteButton;
-  Widget actionWidget;
-  ActionTapCallback tapCallback;
-
-  SlideAction(
-      {this.actionWidget, this.tapCallback, this.isDeleteButton = false});
 }

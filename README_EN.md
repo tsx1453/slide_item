@@ -26,6 +26,7 @@ InheritedWidget, if you need to use the old version, you can use the version wit
 |:-:| :-: |:-:|
 |  child |child Widget | Widget |
 | config | configuration Beans Of Type SlideConfig | SlideConfig |
+|controller|control list element slide state|SlideController|
 
 ##### SlideConfig
 
