@@ -1,3 +1,10 @@
-## [1.0.0] - 基础功能完成
-## [1.0.1] - 调整描述
+## [1.0.4] - 支持从左向右滑动，优化滑动性能,Support swipe from left to right ,optimize scroll performance
+## [1.0.3] - 更新文档,Update document
+## [1.0.3-adapt] - 兼容1.9，更新文档,Compatible with flutter v-1.9, updated documentation
 ## [1.0.2] - 调整描述2,描述写太长了
+## [1.0.2-adapt] - 兼容1.9版本
+## [1.0.1] - 调整描述
+## [1.0.0] - 基础功能完成
+
+
+

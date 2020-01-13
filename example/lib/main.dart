@@ -125,7 +125,7 @@ class _MyHomePageState extends State<MyHomePage> {
                           });
                         },
                         isDeleteButton: true),
-                    if (index % 3 == 0)
+                    if (index % 2 != 0)
                       SlideAction(
                           actionWidget: Container(
                             child: Icon(Icons.directions),
@@ -134,8 +134,31 @@ class _MyHomePageState extends State<MyHomePage> {
                           tapCallback: (_) {
                             print(
                                 'debug -> click at directions ${_.indexInList}');
-                            _.close();
+//                            _.close();
                           }),
+                  ],
+                  leftActions: <SlideAction>[
+                    if (index % 2 == 0)
+                      SlideAction(
+                          actionWidget: Container(
+                            child: Icon(Icons.adjust),
+                            color: Colors.blueGrey,
+                          ),
+                          tapCallback: (_) {
+//                            _.close();
+                            print('debug -> click at adjust ${_.indexInList}');
+                          }),
+                    if (index % 3 == 0)
+                      SlideAction(
+                        actionWidget: Container(
+                          child: Icon(Icons.delete_forever),
+                          color: Colors.red,
+                        ),
+                        tapCallback: (_) {
+                          _.delete();
+                        },
+                        isDeleteButton: true,
+                      )
                   ],
                 );
               },

@@ -49,6 +49,8 @@ class SlideConfig extends ValueNotifier<int> {
   /// 删除的动画第一阶段（Item高度变化）持续时间
   final Duration deleteStep2AnimDuration;
 
+  final Set<int> _openedSet = Set();
+
   SlideConfig(
       {this.slideCloseAnimDuration = kDefaultAnimDuration,
       this.slideOpenAnimDuration = kDefaultAnimDuration,
@@ -63,13 +65,21 @@ class SlideConfig extends ValueNotifier<int> {
       : assert(backgroundColor.value != Colors.transparent.value),
         super(-1);
 
-  close() {
+  _openAt(int index) {
+    _openedSet.add(index);
+  }
+
+  _closeAt(int index) {
+    _openedSet.remove(index);
+  }
+
+  _close() {
     // 这里为了避免某些情况下多次修改这个值导致提前变成-1从而导致再调用此方法导致数值不变而
     // 无法自动关闭，所以这里关闭后使其value多次变化同时由于监听了列表滚动，为了避免过度的
     // 性能消耗，所以这里最多调用10次
-    if (value < 0 && value > -11) {
+    if (value < 0 && value > -11 && _openedSet.length > 0) {
       value = value--;
-    } else {
+    } else if (value > 0) {
       value = -1;
     }
   }
@@ -91,7 +101,7 @@ class SlideConfiguration extends StatelessWidget {
         child: child,
       ),
       onNotification: (_) {
-        config.close();
+        config._close();
         return false;
       },
     );
@@ -224,15 +234,17 @@ class __StfulConsumerState extends State<_StfulConsumer> {
 class SlideItem extends StatefulWidget {
   final int indexInList;
   final List<SlideAction> actions;
+  final List<SlideAction> leftActions;
   final Widget child;
   final bool slidable;
 
   const SlideItem(
       {Key key,
       this.indexInList,
-      this.actions,
+      this.actions = const [],
       this.child,
-      this.slidable = true})
+      this.slidable = true,
+      this.leftActions = const []})
       : assert(indexInList != null && indexInList >= 0),
         assert((slidable && actions != null) || !slidable),
         assert(child != null),
@@ -245,7 +257,11 @@ class SlideItem extends StatefulWidget {
 class _SlideItemState extends State<SlideItem>
     with TickerProviderStateMixin
     implements Slide {
-  int get actionCount => widget.actions?.length;
+  int get actionCount => _direction != _SlideDirection.ltr
+      ? (widget.actions.length)
+      : (widget.leftActions.length);
+
+  bool get supportRightSlide => (widget.leftActions?.length ?? 0) > 0;
 
   double get itemWidth => context?.size?.width ?? 1;
 
@@ -256,13 +272,12 @@ class _SlideItemState extends State<SlideItem>
               : 0.0) +
           _slideConfig.slideProportion);
 
-  double get maxSlideTranslate => -maxSlideProportion * context.size.width;
+  double get maxSlideTranslate => maxSlideProportion * context.size.width;
 
   double get targetSlideProportion =>
       _slideConfig.slideProportion * actionCount;
 
-  double get targetSlideTranslate =>
-      -context.size.width * targetSlideProportion;
+  double get targetSlideTranslate => context.size.width * targetSlideProportion;
 
   double translateValue = 0.0;
 
@@ -274,12 +289,16 @@ class _SlideItemState extends State<SlideItem>
 
   _SlideItemStatus _status = _SlideItemStatus.closed;
 
+  /// 因为direction有为null的情况，所以判断某个状态最好使用!=相反值来判断
+  _SlideDirection _direction;
+
   SlideConfig _slideConfig;
 
   AnimationController _slideController;
   AnimationController _dismissController;
 
   Animation<Offset> _slideAnimation;
+  Animation<Offset> _slideRightAnimation;
   Animation<double> _dismissAnimation;
 
   @override
@@ -289,6 +308,8 @@ class _SlideItemState extends State<SlideItem>
     _slideController = AnimationController(
         vsync: this, duration: _slideConfig.slideOpenAnimDuration);
     _slideAnimation = Tween<Offset>(begin: Offset.zero, end: Offset(-1, 0))
+        .animate(_slideController);
+    _slideRightAnimation = Tween<Offset>(begin: Offset.zero, end: Offset(1, 0))
         .animate(_slideController);
 
     _dismissController = AnimationController(
@@ -311,12 +332,18 @@ class _SlideItemState extends State<SlideItem>
         itemSize = context.size;
       });
     }
-    if (!widget.slidable) {
+    if (!widget.slidable ||
+        (widget.actions.isEmpty && widget.leftActions.isEmpty)) {
       return _buildUnSlidableWidget();
     }
     return deleteSizeChange
         ? _buildDeleteAnimWidget()
         : _buildNormalSlideWidget();
+  }
+
+  // 避免除0
+  T _checkZero<T extends num>(T value) {
+    return value == 0 ? 1 : value;
   }
 
   @override
@@ -329,13 +356,16 @@ class _SlideItemState extends State<SlideItem>
     _slideController
         .animateTo(0,
             duration: _slideConfig.slideCloseAnimDuration *
-                (_slideController.value / targetSlideProportion).abs())
+                (_slideController.value / _checkZero(targetSlideProportion))
+                    .abs())
         .whenComplete(() {
+      _slideConfig._closeAt(indexInList);
       translateValue = 0.0;
+      _direction = null;
       _status = _SlideItemStatus.closed;
       if (_SlideConfigInheritedWidget.of(context, false).nowSlidingIndex ==
           indexInList) {
-        _SlideConfigInheritedWidget.of(context, false).close();
+        _SlideConfigInheritedWidget.of(context, false)._close();
       }
     });
   }
@@ -353,10 +383,16 @@ class _SlideItemState extends State<SlideItem>
         .animateTo(targetSlideProportion,
             curve: Curves.easeIn,
             duration: _slideConfig.slideOpenAnimDuration *
-                (1.0 - _slideController.value / targetSlideProportion).abs())
+                (1.0 -
+                        _slideController.value /
+                            _checkZero(targetSlideProportion))
+                    .abs())
         .whenComplete(() {
+      _slideConfig._openAt(indexInList);
       _status = _SlideItemStatus.opened;
-      translateValue = targetSlideTranslate;
+      double absTv = translateValue.abs();
+      absTv = absTv == 0 ? 1 : absTv;
+      translateValue = (translateValue / absTv) * targetSlideTranslate;
       _markSlidingItemIndex();
     });
   }
@@ -394,11 +430,17 @@ class _SlideItemState extends State<SlideItem>
 
   Widget _buildDeleteAnimWidget() {
     Widget deleteWidget;
-    widget.actions.forEach((action) {
-      if (action.isDeleteButton) {
-        deleteWidget = action.actionWidget;
-      }
-    });
+    var findDeleteAction = (actions) => actions?.forEach((a) {
+          assert(a != null);
+          if (a.isDeleteButton) {
+            deleteWidget = a.actionWidget;
+          }
+        });
+    if (_direction != _SlideDirection.ltr) {
+      findDeleteAction(widget.actions);
+    } else {
+      findDeleteAction(widget.leftActions);
+    }
     if (deleteWidget == null) {
       throw Exception('must have a delete widget when you call delete');
     }
@@ -419,15 +461,8 @@ class _SlideItemState extends State<SlideItem>
     return LayoutBuilder(
       builder: (BuildContext layoutBuilderContext, BoxConstraints constraints) {
         // 把处理Action手势的Widget提前封装好，避免频繁重建
-        List<Widget> actionList = widget.actions
-            .map((action) => GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  child: action.actionWidget,
-                  onTap: () {
-                    action.tapCallback?.call(this);
-                  },
-                ))
-            .toList();
+        List<Widget> actionList = _wrapActionGesture(widget.actions);
+        List<Widget> rightActionList = _wrapActionGesture(widget.leftActions);
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onHorizontalDragStart: _onDragStart,
@@ -442,6 +477,8 @@ class _SlideItemState extends State<SlideItem>
           child: AnimatedBuilder(
             animation: _slideAnimation,
             builder: (_, __) {
+              double actionWidthWithoutElasticity =
+                  constraints.maxWidth * _slideConfig.slideProportion;
               double actionNormalWidth = constraints.maxWidth *
                   (_slideController.value > targetSlideProportion
                       ? _slideController.value / actionCount
@@ -454,38 +491,26 @@ class _SlideItemState extends State<SlideItem>
                       _status != _SlideItemStatus.sliding) close();
                 },
                 builder: (_, config) {
-                  int actionIndex = 0;
                   return _SlideItemContainer(
                     // 当有一个Item处于打开菜单状态时便需要屏蔽child的点击事件使其点击后只是关闭打开的Item
                     absorbing: config.nowSlidingIndex >= 0 ||
                         _status != _SlideItemStatus.closed,
-                    animation: _slideAnimation,
+                    animation: _direction != _SlideDirection.ltr
+                        ? _slideAnimation
+                        : _slideRightAnimation,
                     child: widget.child,
-                    action: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: actionList.map((action) {
-                        SlideAction sa = widget.actions[actionIndex++];
-                        double finallyActionWidth = actionNormalWidth;
-                        // 为删除动画计算Action所需宽度（删除按钮跨度逐渐拉伸，其余按钮宽度压缩）
-                        if (_status == _SlideItemStatus.deleting) {
-                          // _slideController.value对于1的剩余量
-                          double a = 1 - _slideController.value;
-                          // 删除动画额外运动总量
-                          double b = 1 - targetSlideProportion;
-                          finallyActionWidth = (a / b) * actionNormalWidth;
-                          if (sa.isDeleteButton) {
-                            finallyActionWidth =
-                                actionNormalWidth * actionCount -
-                                    finallyActionWidth * (actionCount - 1);
-                          }
-                        }
-                        return Container(
-                          height: double.infinity,
-                          child: action,
-                          width: finallyActionWidth,
-                        );
-                      }).toList(),
-                    ),
+                    action: _buildActions(
+                        actionList,
+                        widget.actions,
+                        _direction != _SlideDirection.ltr
+                            ? actionNormalWidth
+                            : actionWidthWithoutElasticity),
+                    leftAction: _buildActions(
+                        rightActionList,
+                        widget.leftActions,
+                        _direction != _SlideDirection.rtl
+                            ? actionNormalWidth
+                            : actionWidthWithoutElasticity),
                   );
                 },
               );
@@ -493,6 +518,47 @@ class _SlideItemState extends State<SlideItem>
           ),
         );
       },
+    );
+  }
+
+  List<Widget> _wrapActionGesture(List<SlideAction> actions) {
+    return actions
+        ?.map((action) => GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              child: action.actionWidget,
+              onTap: () {
+                action.tapCallback?.call(this);
+              },
+            ))
+        ?.toList();
+  }
+
+  Widget _buildActions(List<Widget> actionList, List<SlideAction> actions,
+      double actionNormalWidth) {
+    int actionIndex = 0;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: actionList.map((action) {
+        SlideAction sa = actions[actionIndex++];
+        double finallyActionWidth = actionNormalWidth;
+        // 为删除动画计算Action所需宽度（删除按钮跨度逐渐拉伸，其余按钮宽度压缩）
+        if (_status == _SlideItemStatus.deleting) {
+          // _slideController.value对于1的剩余量
+          double a = 1 - _slideController.value;
+          // 删除动画额外运动总量
+          double b = 1 - targetSlideProportion;
+          finallyActionWidth = (a / b) * actionNormalWidth;
+          if (sa.isDeleteButton) {
+            finallyActionWidth = actionNormalWidth * actionCount -
+                finallyActionWidth * (actionCount - 1);
+          }
+        }
+        return Container(
+          height: double.infinity,
+          child: action,
+          width: finallyActionWidth,
+        );
+      }).toList(),
     );
   }
 
@@ -523,6 +589,7 @@ class _SlideItemState extends State<SlideItem>
       if (_status == _SlideItemStatus.closed) {
         translateValue = 0;
         _slideController.value = 0;
+        _direction = null;
       }
       _status = _SlideItemStatus.sliding;
       _markSlidingItemIndex();
@@ -537,15 +604,22 @@ class _SlideItemState extends State<SlideItem>
       _slideController.stop();
     }
     double newValue = translateValue + details.primaryDelta;
-    if (newValue < targetSlideTranslate) {
+    _direction = newValue > 0 ? _SlideDirection.ltr : _SlideDirection.rtl;
+
+    var checkDirection = (a1, a2) => a1.length > 0 && _direction == a2;
+
+    if (!checkDirection(widget.actions, _SlideDirection.rtl) &&
+        !checkDirection(widget.leftActions, _SlideDirection.ltr)) {
+      return;
+    }
+
+    if (newValue.abs() > targetSlideTranslate) {
       // 滑动距离过量之后使其增速变缓
       translateValue +=
-          (1 - newValue.abs() / maxSlideTranslate.abs()) * details.primaryDelta;
+          (1 - newValue.abs() / maxSlideTranslate) * details.primaryDelta;
     } else {
       translateValue += details.primaryDelta;
     }
-    // 暂时不支持向右侧滑动，所以这里直接禁止其大于0
-    translateValue = translateValue > 0 ? 0 : translateValue;
     _slideController.value = translateValue.abs() / itemWidth;
     _markSlidingItemIndex();
   }
@@ -553,7 +627,7 @@ class _SlideItemState extends State<SlideItem>
   _onDragEnd(_) {
     closeByPanDown = false;
     _markSlidingItemIndex();
-    double slideRatio = translateValue.abs() / targetSlideTranslate.abs();
+    double slideRatio = translateValue.abs() / targetSlideTranslate;
     if (slideRatio < _slideConfig.actionOpenThreshold) {
       close();
     } else {
@@ -564,15 +638,27 @@ class _SlideItemState extends State<SlideItem>
   _onPanDown(DragDownDetails details, double maxWidth) {
     closeByPanDown = false;
     // 当触摸事件落在打开的action区域时不响应此事件，避免影响action的触摸事件
-    if (maxWidth == null ||
-        ((1 - details.localPosition.dx / maxWidth) > _slideController.value)) {
+    // 方向为空则说明此时没有打开Action，可以直接响应关闭事件
+    var compare = (a1, a2) =>
+        _direction == null ||
+        (_direction != null &&
+            a1 > _slideController.value &&
+            actionCount > 0 &&
+            a2);
+    bool notHitRightAction = maxWidth != null &&
+        compare((1 - details.localPosition.dx / maxWidth),
+            _direction != _SlideDirection.ltr);
+    bool notHitLeftAction = maxWidth != null &&
+        compare((details.localPosition.dx / maxWidth),
+            _direction != _SlideDirection.rtl);
+    if (maxWidth == null || notHitRightAction || notHitLeftAction) {
       if (_status == _SlideItemStatus.opened) {
         if (_slideConfig.closeOpenedItemOnTouch) {
           closeByPanDown = true;
           close();
         }
       } else {
-        _SlideConfigInheritedWidget.of(context, false).close();
+        _SlideConfigInheritedWidget.of(context, false)._close();
       }
     }
   }
@@ -588,23 +674,36 @@ class _SlideItemState extends State<SlideItem>
 class _SlideItemContainer extends StatelessWidget {
   final bool absorbing;
   final Widget action;
+  final Widget leftAction;
   final Widget child;
   final Animation<Offset> animation;
 
-  const _SlideItemContainer(
-      {Key key, this.absorbing, this.action, this.animation, this.child})
-      : super(key: key);
+  const _SlideItemContainer({
+    Key key,
+    this.absorbing,
+    this.action,
+    this.animation,
+    this.child,
+    this.leftAction,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       fit: StackFit.loose,
       children: <Widget>[
-        Positioned.fill(
-            child: Align(
-          child: action,
-          alignment: Alignment.centerRight,
-        )),
+        if (leftAction != null)
+          Positioned.fill(
+              child: Align(
+            child: leftAction,
+            alignment: Alignment.centerLeft,
+          )),
+        if (action != null)
+          Positioned.fill(
+              child: Align(
+            child: action,
+            alignment: Alignment.centerRight,
+          )),
         SlideTransition(
           position: animation,
           child: AbsorbPointer(
@@ -628,6 +727,11 @@ enum _SlideItemStatus {
   opened,
   closed,
   deleting,
+}
+
+enum _SlideDirection {
+  ltr,
+  rtl,
 }
 
 class SlideAction {
