@@ -161,12 +161,12 @@ class _SlideConfigInheritedWidget extends InheritedWidget {
 
   static SlideConfig of(BuildContext context, [bool listen = true]) {
     return listen
-        ? context
-            .dependOnInheritedWidgetOfExactType<_SlideConfigInheritedWidget>()
+        ? (context.inheritFromWidgetOfExactType(_SlideConfigInheritedWidget)
+                as _SlideConfigInheritedWidget)
             .config
         : (context
-                .getElementForInheritedWidgetOfExactType<
-                    _SlideConfigInheritedWidget>()
+                .ancestorInheritedElementForWidgetOfExactType(
+                    _SlideConfigInheritedWidget)
                 .widget as _SlideConfigInheritedWidget)
             .config;
   }
