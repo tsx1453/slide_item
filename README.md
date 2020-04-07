@@ -4,7 +4,7 @@
 [english documentation is here,translate by google translate](./README_EN.md)
 
 Flutter列表Item侧滑菜单组件， flutter_slidable_list_view [github](https://github.com/tsx1453/flutter_slidable_list_view),[pub](https://pub.dev/packages/flutter_slidable_list_view)的优化重构版
-部分实现借鉴了[Provider](https://pub.dev/packages/provider)，由于之前那个sliable_list_view写的太💩了还加了个flutter的头，现在是在看不下去了，所以重新在这个项目里 ~~重构~~ （重写），有什么问题欢迎issues指出，本🥬🐔有空一定及时处理（flag.png）
+部分实现借鉴了[Provider](https://pub.dev/packages/provider)
 
 每个Item的菜单Action数量、Widget可以自由定制，相比于之前的flutter_slidable_list_view，不再与ListView绑定，同时优化了性能，之前滑动一个整个列表所有元素重建，现在仅会重建极小的一部分，目前刷新范围已经控制到最小，后续如有优化空间会继续优化
 
@@ -36,13 +36,14 @@ InheritedWidget，若老版本需要使用可使用带有后缀-adapt的版本
 |    supportElasticity    | 是否支持弹性滑动（即滑动打开菜单时是否可以超过设定值然后反弹） |   Bool   |     True     |
 | closeOpenedItemOnTouch  |  已经打开的Item在触摸其左侧的内容区域的时候是否直接关闭菜单  |   Bool   |     fal      |
 |     slideProportion     |   每个菜单Item的宽度所占的比例（相对于整个ListItem的宽度）   |  double  |     0.25     |
-|  elasticityProportion   |                    弹性滑动的额外可越界值                    | dou b le |     0.1      |
-|   actionOpenThreshold   |                打开菜单所需要的最低的侧滑比例                |  double  |     0.5      |
+|  elasticityProportion   |                    弹性滑动的额外可越界值                    | double |     0.1      |
+|   actionOpenCloseThreshold   |                打开/关闭 菜单所需要的最低的侧滑比例                |  double  |     0.5      |
 |     backgroundColor     | Item的背景颜色（因为使用Stack实现的菜单Item，所以如果列表元素透明会导致重叠），不可为Colors.transparent |  Color   | Colors.white |
 |  slideOpenAnimDuration  | 打开侧边菜单的动画持续时间，这里的时间时从0到完全打开的总时间，实际手指抬起后的动画时间会根据已运动比例来获取实际所需时间 | Duration |    200ms     |
 | slideCloseAnimDuration  |            关闭侧边菜单动画的持续时间（规则同上）            | Duration |    200ms     |
 | deleteStep1AnimDuration | 删除动画第一阶段（删除按钮Widget大小扩展为整个列表Item大小）持续时间 | Duration |    200ms     |
 | deleteStep2AnimDuration |          删除动画第二阶段（Item的高度变化）持续时间          | Duration |    200ms     |
+|slideWidth|每个菜单Item的宽度（此参数不为空时会以此参数为准）|double|null|
 
 ##### SlideItem
 

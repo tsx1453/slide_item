@@ -51,11 +51,14 @@ class SlideConfig extends ValueNotifier<int> {
   /// 可滑动的比例
   final double slideProportion;
 
+  /// 可滑动的宽度（以上面的比例为准，如果两个参数都有的话）
+  final double slideWidth;
+
   /// 弹性效果的富余量
   final double elasticityProportion;
 
   /// Action自动打开动画触发的阈值比例
-  final double actionOpenThreshold;
+  final double actionOpenCloseThreshold;
 
   /// 默认的Item背景
   final Color backgroundColor;
@@ -81,11 +84,13 @@ class SlideConfig extends ValueNotifier<int> {
       this.deleteStep2AnimDuration = kDefaultAnimDuration,
       this.closeOpenedItemOnTouch = false,
       this.elasticityProportion = 0.1,
-      this.actionOpenThreshold = 0.5,
+      this.actionOpenCloseThreshold = 0.5,
       this.supportElasticity = true,
       this.slideProportion = 0.25,
+      this.slideWidth,
       this.backgroundColor = Colors.white})
       : assert(backgroundColor.value != Colors.transparent.value),
+        assert(slideProportion != null || slideWidth != null),
         super(-1);
 
   _openAt(int index) {
@@ -129,18 +134,47 @@ class SlideConfiguration extends StatelessWidget {
 
   SlideConfiguration({Key key, this.config, this.child, this.controller})
       : super(key: key) {
-    controller?._config = config;
+    if (config?.slideProportion != null && config.slideProportion > 0) {
+      controller?._config = config;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (config?.slideWidth != null && config.slideWidth > 0) {
+      return LayoutBuilder(
+        builder: (_, cons) {
+          SlideConfig realConfig = SlideConfig(
+            slideCloseAnimDuration: config.slideCloseAnimDuration,
+            slideOpenAnimDuration: config.slideOpenAnimDuration,
+            deleteStep1AnimDuration: config.deleteStep1AnimDuration,
+            deleteStep2AnimDuration: config.deleteStep2AnimDuration,
+            closeOpenedItemOnTouch: config.closeOpenedItemOnTouch,
+            elasticityProportion: config.elasticityProportion,
+            actionOpenCloseThreshold: config.actionOpenCloseThreshold,
+            supportElasticity: config.supportElasticity,
+            slideProportion: config.slideWidth / cons.maxWidth,
+            slideWidth: config.slideWidth,
+            backgroundColor: config.backgroundColor,
+          )
+            ..value = config.value
+            .._openedSet.addAll(config._openedSet);
+          controller?._config = realConfig;
+          return buildListenerAndProvider(realConfig);
+        },
+      );
+    }
+    return buildListenerAndProvider(config);
+  }
+
+  Widget buildListenerAndProvider(SlideConfig config) {
     return NotificationListener(
       child: _ProviderWidget(
         config: config,
         child: child,
       ),
       onNotification: (_) {
-        config._close();
+        config?._close();
         return false;
       },
     );
@@ -218,7 +252,7 @@ class _ProviderWidgetState extends State<_ProviderWidget> {
   Widget build(BuildContext context) {
     return _SlideConfigInheritedWidget(
       widget.config,
-      widget.config.value,
+      widget.config?.value,
       child: widget.child,
     );
   }
@@ -306,15 +340,15 @@ class _SlideItemState extends State<SlideItem>
 
   double get maxSlideProportion =>
       actionCount *
-      ((_slideConfig.supportElasticity
-              ? _slideConfig.elasticityProportion
+      ((_slideConfig?.supportElasticity == true
+              ? (_slideConfig?.elasticityProportion ?? 0)
               : 0.0) +
-          _slideConfig.slideProportion);
+          (_slideConfig?.slideProportion ?? 0));
 
   double get maxSlideTranslate => maxSlideProportion * context.size.width;
 
   double get targetSlideProportion =>
-      _slideConfig.slideProportion * actionCount;
+      (_slideConfig?.slideProportion ?? 0) * actionCount;
 
   double get targetSlideTranslate => context.size.width * targetSlideProportion;
 
@@ -327,6 +361,7 @@ class _SlideItemState extends State<SlideItem>
   Size itemSize = Size.zero;
 
   _SlideItemStatus _status = _SlideItemStatus.closed;
+  _SlideItemStatus _statusAtDragStart;
 
   /// 因为direction有为null的情况，所以判断某个状态最好使用!=相反值来判断
   _SlideDirection _direction;
@@ -345,14 +380,17 @@ class _SlideItemState extends State<SlideItem>
     super.initState();
     _slideConfig = _SlideConfigInheritedWidget.of(context, false);
     _slideController = AnimationController(
-        vsync: this, duration: _slideConfig.slideOpenAnimDuration);
+        vsync: this,
+        duration: _slideConfig?.slideOpenAnimDuration ?? kDefaultAnimDuration);
     _slideAnimation = Tween<Offset>(begin: Offset.zero, end: Offset(-1, 0))
         .animate(_slideController);
     _slideRightAnimation = Tween<Offset>(begin: Offset.zero, end: Offset(1, 0))
         .animate(_slideController);
 
     _dismissController = AnimationController(
-        vsync: this, duration: _slideConfig.deleteStep2AnimDuration);
+        vsync: this,
+        duration:
+            _slideConfig?.deleteStep2AnimDuration ?? kDefaultAnimDuration);
     _dismissAnimation =
         Tween<double>(begin: 1.0, end: 0.0).animate(_dismissController);
   }
@@ -394,11 +432,12 @@ class _SlideItemState extends State<SlideItem>
     // 根据剩余需要运动的比例来动态调整运动时间
     _slideController
         .animateTo(0,
-            duration: _slideConfig.slideCloseAnimDuration *
-                (_slideController.value / _checkZero(targetSlideProportion))
-                    .abs())
+            duration:
+                (_slideConfig?.slideCloseAnimDuration ?? kDefaultAnimDuration) *
+                    (_slideController.value / _checkZero(targetSlideProportion))
+                        .abs())
         .whenComplete(() {
-      _slideConfig._closeAt(indexInList);
+      _slideConfig?._closeAt(indexInList);
       translateValue = 0.0;
       _direction = null;
       _status = _SlideItemStatus.closed;
@@ -421,13 +460,14 @@ class _SlideItemState extends State<SlideItem>
     _slideController
         .animateTo(targetSlideProportion,
             curve: Curves.easeIn,
-            duration: _slideConfig.slideOpenAnimDuration *
-                (1.0 -
-                        _slideController.value /
-                            _checkZero(targetSlideProportion))
-                    .abs())
+            duration:
+                (_slideConfig?.slideOpenAnimDuration ?? kDefaultAnimDuration) *
+                    (1.0 -
+                            _slideController.value /
+                                _checkZero(targetSlideProportion))
+                        .abs())
         .whenComplete(() {
-      _slideConfig._openAt(indexInList);
+      _slideConfig?._openAt(indexInList);
       _status = _SlideItemStatus.opened;
       double absTv = translateValue.abs();
       absTv = absTv == 0 ? 1 : absTv;
@@ -450,7 +490,8 @@ class _SlideItemState extends State<SlideItem>
     if (useAnim) {
       _slideController
           .animateTo(1.0,
-              duration: _slideConfig.deleteStep1AnimDuration,
+              duration:
+                  _slideConfig?.deleteStep1AnimDuration ?? kDefaultAnimDuration,
               curve: Curves.easeIn)
           .then((_) {
         setState(() {
@@ -517,22 +558,22 @@ class _SlideItemState extends State<SlideItem>
             animation: _slideAnimation,
             builder: (_, __) {
               double actionWidthWithoutElasticity =
-                  constraints.maxWidth * _slideConfig.slideProportion;
+                  constraints.maxWidth * (_slideConfig?.slideProportion ?? 0);
               double actionNormalWidth = constraints.maxWidth *
                   (_slideController.value > targetSlideProportion
                       ? _slideController.value / actionCount
-                      : _slideConfig.slideProportion);
+                      : (_slideConfig?.slideProportion ?? 0));
               return _StfulConsumer(
                 didChangeDependencies: (config) {
                   _slideConfig = config;
-                  if (config.nowSlidingIndex != indexInList &&
+                  if (config?.nowSlidingIndex != indexInList &&
                       _status != _SlideItemStatus.closed &&
                       _status != _SlideItemStatus.sliding) close();
                 },
                 builder: (_, config) {
                   return _SlideItemContainer(
                     // 当有一个Item处于打开菜单状态时便需要屏蔽child的点击事件使其点击后只是关闭打开的Item
-                    absorbing: config.nowSlidingIndex >= 0 ||
+                    absorbing: (config?.nowSlidingIndex ?? -1) >= 0 ||
                         _status != _SlideItemStatus.closed,
                     animation: _direction != _SlideDirection.ltr
                         ? _slideAnimation
@@ -614,7 +655,7 @@ class _SlideItemState extends State<SlideItem>
         builder: (_, config) {
           return AbsorbPointer(
             child: widget.child,
-            absorbing: config.nowSlidingIndex >= 0,
+            absorbing: (config?.nowSlidingIndex ?? -1) >= 0,
           );
         },
       ),
@@ -625,6 +666,7 @@ class _SlideItemState extends State<SlideItem>
     if (_status != _SlideItemStatus.opening &&
         _status != _SlideItemStatus.closing &&
         !closeByPanDown) {
+      _statusAtDragStart = _status;
       if (_status == _SlideItemStatus.closed) {
         translateValue = 0;
         _slideController.value = 0;
@@ -667,11 +709,25 @@ class _SlideItemState extends State<SlideItem>
     closeByPanDown = false;
     _markSlidingItemIndex();
     double slideRatio = translateValue.abs() / targetSlideTranslate;
-    if (slideRatio < _slideConfig.actionOpenThreshold) {
-      close();
+    if (_statusAtDragStart == _SlideItemStatus.closed) {
+      if (slideRatio >= (_slideConfig?.actionOpenCloseThreshold ?? 1)) {
+        _open();
+      } else {
+        close();
+      }
     } else {
-      _open();
+      double r = 1 - slideRatio;
+      if (r >= (_slideConfig?.actionOpenCloseThreshold ?? 1)) {
+        close();
+      } else {
+        _open();
+      }
     }
+//    if (slideRatio < (_slideConfig?.actionOpenThreshold ?? 0)) {
+//      close();
+//    } else {
+//      _open();
+//    }
   }
 
   _onPanDown(DragDownDetails details, double maxWidth) {
@@ -692,12 +748,12 @@ class _SlideItemState extends State<SlideItem>
             _direction != _SlideDirection.rtl);
     if (maxWidth == null || notHitRightAction || notHitLeftAction) {
       if (_status == _SlideItemStatus.opened) {
-        if (_slideConfig.closeOpenedItemOnTouch) {
+        if (_slideConfig?.closeOpenedItemOnTouch == true) {
           closeByPanDown = true;
           close();
         }
       } else {
-        _SlideConfigInheritedWidget.of(context, false)._close();
+        _SlideConfigInheritedWidget.of(context, false)?._close();
       }
     }
   }
@@ -706,7 +762,7 @@ class _SlideItemState extends State<SlideItem>
   /// Index设为负数表示全部关闭，这样新拉开的就没办法关闭了，所以在能够标记当前Item状态的地方
   /// 多次设置这个值，因为值没有变化不会引起重新构建，所以对性能消耗不大
   _markSlidingItemIndex() {
-    _SlideConfigInheritedWidget.of(context, false).value = indexInList;
+    _SlideConfigInheritedWidget.of(context, false)?.value = indexInList;
   }
 }
 
@@ -749,7 +805,8 @@ class _SlideItemContainer extends StatelessWidget {
             child: Container(
               child: child,
               color: _SlideConfigInheritedWidget.of(context, false)
-                  .backgroundColor,
+                      ?.backgroundColor ??
+                  Colors.red,
             ),
             absorbing: absorbing,
           ),
