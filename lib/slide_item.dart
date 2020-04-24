@@ -710,24 +710,21 @@ class _SlideItemState extends State<SlideItem>
     _markSlidingItemIndex();
     double slideRatio = translateValue.abs() / targetSlideTranslate;
     if (_statusAtDragStart == _SlideItemStatus.closed) {
-      if (slideRatio >= (_slideConfig?.actionOpenCloseThreshold ?? 1)) {
+      if (slideRatio >= (_slideConfig?.actionOpenCloseThreshold ?? 1) &&
+          _status != _SlideItemStatus.closing) {
         _open();
-      } else {
+      } else if (_status != _SlideItemStatus.opening) {
         close();
       }
     } else {
       double r = 1 - slideRatio;
-      if (r >= (_slideConfig?.actionOpenCloseThreshold ?? 1)) {
+      if (r >= (_slideConfig?.actionOpenCloseThreshold ?? 1) &&
+          _status != _SlideItemStatus.opening) {
         close();
-      } else {
+      } else if (_status != _SlideItemStatus.closing) {
         _open();
       }
     }
-//    if (slideRatio < (_slideConfig?.actionOpenThreshold ?? 0)) {
-//      close();
-//    } else {
-//      _open();
-//    }
   }
 
   _onPanDown(DragDownDetails details, double maxWidth) {

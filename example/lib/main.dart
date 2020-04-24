@@ -63,9 +63,9 @@ class _MyHomePageState extends State<MyHomePage> {
             deleteStep1AnimDuration: Duration(milliseconds: 250),
             deleteStep2AnimDuration: Duration(milliseconds: 300),
             supportElasticity: true,
-            closeOpenedItemOnTouch: false,
+            closeOpenedItemOnTouch: true,
 //            slideProportion: 0.2,
-        slideWidth: 40,
+            slideWidth: 40,
             actionOpenCloseThreshold: 0.3,
             backgroundColor: Colors.white),
         child: Padding(
