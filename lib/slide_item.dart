@@ -49,7 +49,7 @@ class SlideConfig extends ValueNotifier<int> {
   final bool closeOpenedItemOnTouch;
 
   /// 可滑动的比例
-  final double slideProportion;
+  double slideProportion;
 
   /// 可滑动的宽度（以上面的比例为准，如果两个参数都有的话）
   final double slideWidth;
@@ -127,13 +127,42 @@ class SlideController {
 }
 
 /// 对外暴露的用于放在上层的提供配置信息以及共享菜单打开状态的Widget
-class SlideConfiguration extends StatelessWidget {
+class SlideConfiguration extends StatefulWidget {
   final SlideConfig config;
   final Widget child;
   final SlideController controller;
 
   SlideConfiguration({Key key, this.config, this.child, this.controller})
-      : super(key: key) {
+      : super(key: key);
+
+  @override
+  _SlideConfigurationState createState() => _SlideConfigurationState();
+}
+
+class _SlideConfigurationState extends State<SlideConfiguration> {
+  SlideConfig config;
+
+  SlideController get controller => widget.controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateAndBindConfig();
+  }
+
+  @override
+  void didUpdateWidget(SlideConfiguration oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (config != oldWidget.config) {
+      SlideConfig sc = config;
+      _updateAndBindConfig();
+      config.value = sc.value;
+      config._openedSet.addAll(sc._openedSet);
+    }
+  }
+
+  void _updateAndBindConfig() {
+    config = widget.config;
     if (config?.slideProportion != null && config.slideProportion > 0) {
       controller?._config = config;
     }
@@ -144,23 +173,9 @@ class SlideConfiguration extends StatelessWidget {
     if (config?.slideWidth != null && config.slideWidth > 0) {
       return LayoutBuilder(
         builder: (_, cons) {
-          SlideConfig realConfig = SlideConfig(
-            slideCloseAnimDuration: config.slideCloseAnimDuration,
-            slideOpenAnimDuration: config.slideOpenAnimDuration,
-            deleteStep1AnimDuration: config.deleteStep1AnimDuration,
-            deleteStep2AnimDuration: config.deleteStep2AnimDuration,
-            closeOpenedItemOnTouch: config.closeOpenedItemOnTouch,
-            elasticityProportion: config.elasticityProportion,
-            actionOpenCloseThreshold: config.actionOpenCloseThreshold,
-            supportElasticity: config.supportElasticity,
-            slideProportion: config.slideWidth / cons.maxWidth,
-            slideWidth: config.slideWidth,
-            backgroundColor: config.backgroundColor,
-          )
-            ..value = config.value
-            .._openedSet.addAll(config._openedSet);
-          controller?._config = realConfig;
-          return buildListenerAndProvider(realConfig);
+          config.slideProportion =
+              config.slideWidth / cons.maxWidth;
+          return buildListenerAndProvider(config);
         },
       );
     }
@@ -171,7 +186,7 @@ class SlideConfiguration extends StatelessWidget {
     return NotificationListener(
       child: _ProviderWidget(
         config: config,
-        child: child,
+        child: widget.child,
       ),
       onNotification: (_) {
         config?._close();
