@@ -107,7 +107,7 @@ class SlideConfig extends ValueNotifier<int> {
     // 性能消耗，所以这里最多调用10次
     if (value < 0 && value > -11 && _openedSet.length > 0) {
       value = value--;
-    } else if (value > 0) {
+    } else if (value >= 0) {
       value = -1;
     }
   }
