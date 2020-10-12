@@ -1,3 +1,4 @@
+## [1.0.8] - 修复第一个Item无法自动关闭的问题，支持为每个item设置单独的侧滑Item宽度，Fix the problem that the first Item cannot be closed automatically, and support to set a separate sliding Item width for each item
 ## [1.0.7] - 修复setState时已打开Item被关闭的问题，Fix the problem that the opened item is closed when setState
 ## [1.0.6] - 关闭阈值判定逻辑调整，Turn off threshold decision logic adjustment
 ## [1.0.5] - 支持直接通过宽度数值来定制侧边菜单的宽度,Support to customize the width of the side menu directly by the width value

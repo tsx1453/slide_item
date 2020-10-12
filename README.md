@@ -54,6 +54,7 @@ InheritedWidget，若老版本需要使用可使用带有后缀-adapt的版本
 |    child    |         child          |      Widget      |  null  |
 |  slidable   |      是否可以滑动      |       bool       |  true  |
 | leftActions| 从左向右滑动的菜单Item | List<SlideAction> | [] |
+| slideWidth|每个菜单Item的宽度，覆盖SlideConfig的值|double|null|
 
 
 

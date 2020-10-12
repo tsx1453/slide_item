@@ -75,8 +75,8 @@ class _MyHomePageState extends State<MyHomePage> {
               builder: (_) {
                 print('debug -> build at builder $index');
                 return SlideItem(
-                  slidable: index % 5 != 0,
                   indexInList: index,
+                  slideWidth: index == 3 ? 100 : null,
                   child: GestureDetector(
                     child: Container(
                       decoration: BoxDecoration(

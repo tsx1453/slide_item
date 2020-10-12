@@ -173,8 +173,7 @@ class _SlideConfigurationState extends State<SlideConfiguration> {
     if (config?.slideWidth != null && config.slideWidth > 0) {
       return LayoutBuilder(
         builder: (_, cons) {
-          config.slideProportion =
-              config.slideWidth / cons.maxWidth;
+          config.slideProportion = config.slideWidth / cons.maxWidth;
           return buildListenerAndProvider(config);
         },
       );
@@ -325,15 +324,17 @@ class SlideItem extends StatefulWidget {
   final List<SlideAction> leftActions;
   final Widget child;
   final bool slidable;
+  final double slideWidth;
 
-  const SlideItem(
-      {Key key,
-      this.indexInList,
-      this.actions = const [],
-      this.child,
-      this.slidable = true,
-      this.leftActions = const []})
-      : assert(indexInList != null && indexInList >= 0),
+  const SlideItem({
+    Key key,
+    this.indexInList,
+    this.actions = const [],
+    this.child,
+    this.slidable = true,
+    this.leftActions = const [],
+    this.slideWidth,
+  })  : assert(indexInList != null && indexInList >= 0),
         assert((slidable && actions != null) || !slidable),
         assert(child != null),
         super(key: key);
@@ -345,6 +346,8 @@ class SlideItem extends StatefulWidget {
 class _SlideItemState extends State<SlideItem>
     with TickerProviderStateMixin
     implements Slide {
+  double _effectSlideProportion;
+
   int get actionCount => _direction != _SlideDirection.ltr
       ? (widget.actions.length)
       : (widget.leftActions.length);
@@ -358,12 +361,12 @@ class _SlideItemState extends State<SlideItem>
       ((_slideConfig?.supportElasticity == true
               ? (_slideConfig?.elasticityProportion ?? 0)
               : 0.0) +
-          (_slideConfig?.slideProportion ?? 0));
+          (_effectSlideProportion ?? 0));
 
   double get maxSlideTranslate => maxSlideProportion * context.size.width;
 
   double get targetSlideProportion =>
-      (_slideConfig?.slideProportion ?? 0) * actionCount;
+      (_effectSlideProportion ?? 0) * actionCount;
 
   double get targetSlideTranslate => context.size.width * targetSlideProportion;
 
@@ -408,6 +411,9 @@ class _SlideItemState extends State<SlideItem>
             _slideConfig?.deleteStep2AnimDuration ?? kDefaultAnimDuration);
     _dismissAnimation =
         Tween<double>(begin: 1.0, end: 0.0).animate(_dismissController);
+    if ((widget.slideWidth ?? -1) < 0) {
+      _effectSlideProportion = _slideConfig.slideProportion;
+    }
   }
 
   @override
@@ -555,6 +561,9 @@ class _SlideItemState extends State<SlideItem>
   Widget _buildNormalSlideWidget() {
     return LayoutBuilder(
       builder: (BuildContext layoutBuilderContext, BoxConstraints constraints) {
+        if ((widget.slideWidth ?? -1) >= 0) {
+          _effectSlideProportion ??= widget.slideWidth / constraints.maxWidth;
+        }
         // 把处理Action手势的Widget提前封装好，避免频繁重建
         List<Widget> actionList = _wrapActionGesture(widget.actions);
         List<Widget> rightActionList = _wrapActionGesture(widget.leftActions);
@@ -573,11 +582,11 @@ class _SlideItemState extends State<SlideItem>
             animation: _slideAnimation,
             builder: (_, __) {
               double actionWidthWithoutElasticity =
-                  constraints.maxWidth * (_slideConfig?.slideProportion ?? 0);
+                  constraints.maxWidth * (_effectSlideProportion ?? 0);
               double actionNormalWidth = constraints.maxWidth *
                   (_slideController.value > targetSlideProportion
                       ? _slideController.value / actionCount
-                      : (_slideConfig?.slideProportion ?? 0));
+                      : (_effectSlideProportion ?? 0));
               return _StfulConsumer(
                 didChangeDependencies: (config) {
                   _slideConfig = config;
