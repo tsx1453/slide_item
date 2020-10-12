@@ -417,6 +417,14 @@ class _SlideItemState extends State<SlideItem>
   }
 
   @override
+  void didUpdateWidget(covariant SlideItem oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.slideWidth != oldWidget.slideWidth) {
+      _effectSlideProportion = null;
+    }
+  }
+
+  @override
   void dispose() {
     _slideController.dispose();
     _dismissController.dispose();

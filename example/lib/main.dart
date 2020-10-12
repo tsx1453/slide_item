@@ -156,7 +156,11 @@ class _MyHomePageState extends State<MyHomePage> {
                           color: Colors.red,
                         ),
                         tapCallback: (_) {
-                          _.delete();
+                          _.delete()?.then((value) {
+                            setState(() {
+                              colors.removeAt(index);
+                            });
+                          });
                         },
                         isDeleteButton: true,
                       )
